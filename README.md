@@ -1,1 +1,1 @@
-# Analizador-L-xico-y-Sint-ctico
+# Analizador-Léxico-y-Sintáctico

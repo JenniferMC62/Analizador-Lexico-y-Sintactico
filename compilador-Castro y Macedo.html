@@ -1,0 +1,2092 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador Léxico y Sintáctico</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 2px 20px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            opacity: 0.95;
+            font-size: 1.15em;
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-container {
+            background: #f8f9fa;
+            padding: 30px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .nav-card {
+            background: white;
+            border: 2px solid transparent;
+            border-radius: 16px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .nav-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 28px rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+
+        .nav-card.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-card.active .nav-icon {
+            color: white;
+        }
+
+        .nav-icon {
+            font-size: 2.5em;
+            margin-bottom: 12px;
+            display: block;
+            transition: transform 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-card:hover .nav-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .nav-card.active .nav-icon {
+            transform: scale(1.05);
+        }
+
+        .nav-title {
+            font-weight: 700;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-subtitle {
+            font-size: 0.85em;
+            opacity: 0.7;
+            position: relative;
+            z-index: 1;
+        }
+
+        .screen {
+            display: none;
+            padding: 30px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { 
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .panel:hover {
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+        }
+
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel h2::before {
+            content: '';
+            width: 4px;
+            height: 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 4px;
+        }
+
+        .editor-container {
+            grid-column: 1 / -1;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 320px;
+            padding: 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            resize: vertical;
+            background: #f8f9fa;
+            line-height: 1.6;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #38b2ac 0%, #2c7a7b 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(56, 178, 172, 0.35);
+        }
+
+        .btn-save {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            color: white;
+        }
+
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(237, 137, 54, 0.35);
+        }
+
+        .output {
+            background: #f8f9fa;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 220px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+        }
+
+        .output::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .output::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .output::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 24px;
+            border-radius: 16px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.25);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%);
+            transition: transform 0.6s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 12px 32px rgba(102, 126, 234, 0.4);
+        }
+
+        .stat-card:hover::before {
+            transform: translate(10%, 10%);
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.95;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .token-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .token-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 18px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .token-table td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+        }
+
+        .token-table tbody tr {
+            transition: all 0.2s ease;
+        }
+
+        .token-table tbody tr:hover {
+            background: #f7fafc;
+            transform: scale(1.01);
+        }
+
+        .token-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .token-type-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.2s ease;
+        }
+
+        .token-type-badge:hover {
+            transform: scale(1.05);
+        }
+
+        .badge-keyword { 
+            background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);
+            color: #c2185b;
+            border: 1px solid #f8bbd0;
+        }
+        .badge-operator { 
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
+        .badge-delimiter { 
+            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+            color: #7b1fa2;
+            border: 1px solid #e1bee7;
+        }
+        .badge-identifier { 
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            color: #388e3c;
+            border: 1px solid #c8e6c9;
+        }
+        .badge-number { 
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            color: #f57c00;
+            border: 1px solid #ffe0b2;
+        }
+        .badge-string { 
+            background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);
+            color: #c2185b;
+            border: 1px solid #f8bbd0;
+        }
+
+        .lexema-display {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: #f7fafc;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            color: #2d3748;
+            display: inline-block;
+            transition: all 0.2s ease;
+        }
+
+        .lexema-display:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+
+        .location-info {
+            font-size: 11px;
+            color: #a0aec0;
+            font-weight: 600;
+        }
+
+        .error {
+            background: linear-gradient(to right, #fff5f5, #fed7d7);
+            border-left: 4px solid #fc8181;
+            color: #c53030;
+            padding: 14px 18px;
+            margin: 8px 0;
+            border-radius: 8px;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .success {
+            background: linear-gradient(to right, #f0fff4, #c6f6d5);
+            border-left: 4px solid #68d391;
+            color: #276749;
+            padding: 14px 18px;
+            margin: 8px 0;
+            border-radius: 8px;
+            animation: slideIn 0.4s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .tree-container {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            overflow-x: auto;
+        }
+
+        .tree-node {
+            margin-left: 24px;
+            padding: 10px 0;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .tree-node:hover {
+            background: #f7fafc;
+            margin-left: 20px;
+            padding-left: 8px;
+            border-radius: 6px;
+        }
+
+        .tree-node::before {
+            content: "├─ ";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .node-programa { color: #e53e3e; font-weight: bold; }
+        .node-importacion { color: #d69e2e; }
+        .node-metodo { color: #38a169; font-weight: bold; }
+        .node-declaracion { color: #3182ce; }
+        .node-expresion { color: #805ad5; }
+        .node-sentencia { color: #dd6b20; }
+
+        .examples {
+            grid-column: 1 / -1;
+        }
+
+        .example-tabs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .example-tab {
+            padding: 14px 20px;
+            background: #f8f9fa;
+            border: 2px solid transparent;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .example-tab:hover {
+            background: #e2e8f0;
+            transform: translateY(-2px);
+        }
+
+        .example-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .example-code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 12px 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            line-height: 1.6;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            padding: 14px 28px;
+            background: #e2e8f0;
+            color: #4a5568;
+            border-radius: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .file-label:hover {
+            background: #cbd5e0;
+            transform: translateY(-2px);
+        }
+
+        .grammar-section {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .grammar-section h3 {
+            color: #667eea;
+            margin-bottom: 18px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 1.2em;
+        }
+
+        .grammar-rule {
+            background: #f8f9fa;
+            padding: 14px 16px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        .grammar-rule:hover {
+            background: #edf2f7;
+            transform: translateX(4px);
+        }
+
+        .grammar-rule .non-terminal {
+            color: #e53e3e;
+            font-weight: bold;
+        }
+
+        .grammar-rule .terminal {
+            color: #38a169;
+        }
+
+        .grammar-rule .arrow {
+            color: #667eea;
+            font-weight: bold;
+            margin: 0 8px;
+        }
+
+        .token-definition {
+            display: inline-block;
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            padding: 8px 14px;
+            margin: 6px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 12px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
+
+        .token-definition:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        /* ESTILOS PARA HISTORIAL */
+        .history-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .history-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .history-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+            transform: translateX(8px);
+        }
+
+        .history-card:hover::before {
+            transform: scaleY(1);
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .history-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .history-date {
+            font-size: 0.85em;
+            color: #a0aec0;
+            font-weight: 500;
+        }
+
+        .history-preview {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 12px;
+            color: #4a5568;
+            margin: 10px 0;
+            max-height: 80px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .history-preview::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 30px;
+            background: linear-gradient(transparent, #f8f9fa);
+        }
+
+        .history-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn-load {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-load:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-delete {
+            padding: 8px 16px;
+            background: #fed7d7;
+            color: #c53030;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-delete:hover {
+            background: #fc8181;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .save-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .save-modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+            animation: slideUp 0.3s ease;
+        }
+
+        .modal-content h3 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .modal-content input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a0aec0;
+        }
+
+        .empty-state-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-subtext {
+            font-size: 0.95em;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            .nav-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .header h1 {
+                font-size: 1.8em;
+            }
+            .stats-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔬 Analizador Léxico y Sintáctico</h1>
+            <p>Lenguajes y Autómatas 2 - Ing. en Sistemas Computacionales - Castro y Macedo</p>
+        </div>
+
+        <div class="nav-container">
+            <div class="nav-grid">
+                <div class="nav-card active" onclick="cambiarPantalla(0)">
+                    <span class="nav-icon">🖊️</span>
+                    <div class="nav-title">Editor</div>
+                    <div class="nav-subtitle">Escribe tu código</div>
+                </div>
+                <div class="nav-card" onclick="cambiarPantalla(1)">
+                    <span class="nav-icon">🎯</span>
+                    <div class="nav-title">Léxico</div>
+                    <div class="nav-subtitle">Análisis de tokens</div>
+                </div>
+                <div class="nav-card" onclick="cambiarPantalla(2)">
+                    <span class="nav-icon">🌳</span>
+                    <div class="nav-title">Sintáctico</div>
+                    <div class="nav-subtitle">Árbol de análisis</div>
+                </div>
+                <div class="nav-card" onclick="cambiarPantalla(3)">
+                    <span class="nav-icon">📚</span>
+                    <div class="nav-title">Gramática</div>
+                    <div class="nav-subtitle">Reglas y tokens</div>
+                </div>
+                <div class="nav-card" onclick="cambiarPantalla(4)">
+                    <span class="nav-icon">📁</span>
+                    <div class="nav-title">Historial</div>
+                    <div class="nav-subtitle">Códigos guardados</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTALLA 1: Inicio / Editor -->
+        <div class="screen active" id="screen0">
+            <div class="main-content">
+                <div class="panel editor-container">
+                    <h2>📝 Editor de Código</h2>
+                    <textarea id="codeInput" placeholder="Escribe o pega tu código aquí...">import stdio;
+
+void main() {
+    int x = 10;
+    float y = 3.14;
+    print(x + y);
+}</textarea>
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="analizarLexico()">
+                            🔤 Análisis Léxico
+                        </button>
+                        <button class="btn-primary" onclick="analizarSintactico()">
+                            🌳 Análisis Sintáctico
+                        </button>
+                        <button class="btn-success" onclick="analizarCompleto()">
+                            ✅ Análisis Completo
+                        </button>
+                        <button class="btn-save" onclick="mostrarModalGuardar()">
+                            💾 Guardar Código
+                        </button>
+                        <label class="file-label">
+                            📂 Cargar Archivo
+                            <input type="file" id="fileInput" accept=".txt,.cpp,.c" onchange="cargarArchivo()">
+                        </label>
+                        <button class="btn-secondary" onclick="limpiar()">
+                            🗑️ Limpiar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="panel examples">
+                    <h2>📚 Ejemplos de Código</h2>
+                    <div class="example-tabs">
+                        <button class="example-tab active" onclick="mostrarEjemplo(0)">Ejemplo 1</button>
+                        <button class="example-tab" onclick="mostrarEjemplo(1)">Ejemplo 2</button>
+                        <button class="example-tab" onclick="mostrarEjemplo(2)">Ejemplo 3</button>
+                        <button class="example-tab" onclick="mostrarEjemplo(3)">Ejemplo 4</button>
+                    </div>
+                    <div class="tab-content active" data-ejemplo="0">
+                        <div class="example-code">import stdio;
+
+void main() {
+    int x = 10;
+    float y = 3.14;
+    print(x + y);
+}</div>
+                    </div>
+                    <div class="tab-content" data-ejemplo="1">
+                        <div class="example-code">import math;
+
+int function suma(int a, int b) {
+    return a + b;
+}
+
+void main() {
+    int resultado = suma(5, 3);
+    print(resultado);
+}</div>
+                    </div>
+                    <div class="tab-content" data-ejemplo="2">
+                        <div class="example-code">import stdio;
+
+void main() {
+    int i = 0;
+    while (i < 10) {
+        print(i);
+        i = i + 1;
+    }
+}</div>
+                    </div>
+                    <div class="tab-content" data-ejemplo="3">
+                        <div class="example-code">import stdio;
+
+void main() {
+    int x = 5;
+    if (x > 3) {
+        print("Mayor que 3");
+    } else {
+        print("Menor o igual a 3");
+    }
+}</div>
+                    </div>
+                    <button class="btn-secondary" onclick="cargarEjemploActual()" style="margin-top: 10px;">
+                        ⬆️ Cargar este ejemplo
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTALLA 2: Análisis Léxico -->
+        <div class="screen" id="screen1">
+            <div class="panel" style="max-width: 100%;">
+                <h2>🎯 Resultados del Análisis Léxico</h2>
+                <div id="tokensOutput" class="output">
+                    <p style="color: #888;">Presiona "Análisis Léxico" para ver los tokens...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTALLA 3: Análisis Sintáctico -->
+        <div class="screen" id="screen2">
+            <div class="panel" style="max-width: 100%;">
+                <h2>🌳 Árbol Sintáctico Generado</h2>
+                <div id="syntaxOutput" class="output">
+                    <p style="color: #888;">Presiona "Análisis Sintáctico" para ver el árbol...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTALLA 4: Reglas y Gramática -->
+        <div class="screen" id="screen3">
+            <div style="padding: 20px;">
+                <h2 style="color: #667eea; margin-bottom: 20px;">⚙️ Reglas de Gramática y Tokens</h2>
+                
+                <div class="grammar-section">
+                    <h3>📋 Estructura del Programa</h3>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">programa</span> <span class="arrow">→</span> <span class="terminal">lista_importaciones_opt metodo_principal lista_funciones_opt</span>
+                    </div>
+                </div>
+
+                <div class="grammar-section">
+                    <h3>📦 Importaciones</h3>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">lista_importaciones_opt</span> <span class="arrow">→</span> <span class="terminal">lista_importaciones | ε</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">importacion</span> <span class="arrow">→</span> <span class="terminal">IMPORT ID PUNTOYCOMA</span>
+                    </div>
+                </div>
+
+                <div class="grammar-section">
+                    <h3>🎯 Método Principal</h3>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">metodo_principal</span> <span class="arrow">→</span> <span class="terminal">VOID MAIN LPAR RPAR bloque</span>
+                    </div>
+                </div>
+
+                <div class="grammar-section">
+                    <h3>⚡ Funciones</h3>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">declaracion_funcion</span> <span class="arrow">→</span> <span class="terminal">tipo_funcion FUNCTION ID LPAR parametros_opcional RPAR bloque</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">tipo_funcion</span> <span class="arrow">→</span> <span class="terminal">tipo_dato | VOID</span>
+                    </div>
+                </div>
+
+                <div class="grammar-section">
+                    <h3>💾 Tipos de Datos</h3>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">tipo_dato</span> <span class="arrow">→</span> <span class="terminal">INT | FLOAT | STRING | BOOLEAN</span>
+                    </div>
+                </div>
+
+                <div class="grammar-section">
+                    <h3>📝 Sentencias</h3>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">sentencia</span> <span class="arrow">→</span> <span class="terminal">declaracion_variable PUNTOYCOMA</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">sentencia</span> <span class="arrow">→</span> <span class="terminal">asignacion PUNTOYCOMA</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">sentencia</span> <span class="arrow">→</span> <span class="terminal">sentencia_if | sentencia_for | sentencia_while</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">sentencia_if</span> <span class="arrow">→</span> <span class="terminal">IF LPAR expresion RPAR bloque sentencia_if_prima</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">sentencia_while</span> <span class="arrow">→</span> <span class="terminal">WHILE LPAR expresion RPAR bloque</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">sentencia_for</span> <span class="arrow">→</span> <span class="terminal">FOR LPAR for_a PUNTOYCOMA expresion PUNTOYCOMA for_z RPAR bloque</span>
+                    </div>
+                </div>
+
+                <div class="grammar-section">
+                    <h3>🔢 Expresiones</h3>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">expresion</span> <span class="arrow">→</span> <span class="terminal">expresion_logica</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">expresion_logica</span> <span class="arrow">→</span> <span class="terminal">expresion_and expresion_logica_prima</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">expresion_aditiva</span> <span class="arrow">→</span> <span class="terminal">expresion_multiplicativa expresion_aditiva_prima</span>
+                    </div>
+                    <div class="grammar-rule">
+                        <span class="non-terminal">expresion_primitiva</span> <span class="arrow">→</span> <span class="terminal">NUM_ENTERO | NUM_DECIMAL | CADENA | TRUE | FALSE | ID</span>
+                    </div>
+                </div>
+
+                <div class="grammar-section">
+                    <h3>🎫 Tokens Utilizados</h3>
+                    <h4 style="color: #666; margin: 15px 0 10px 0;">Literales:</h4>
+                    <span class="token-definition">NUM_ENTERO</span>
+                    <span class="token-definition">NUM_DECIMAL</span>
+                    <span class="token-definition">CADENA</span>
+                    <span class="token-definition">TRUE</span>
+                    <span class="token-definition">FALSE</span>
+                    <span class="token-definition">ID</span>
+
+                    <h4 style="color: #666; margin: 15px 0 10px 0;">Operadores:</h4>
+                    <span class="token-definition">+ (SUMA)</span>
+                    <span class="token-definition">- (RESTA)</span>
+                    <span class="token-definition">* (MULT)</span>
+                    <span class="token-definition">/ (DIV)</span>
+                    <span class="token-definition">% (MODULO)</span>
+                    <span class="token-definition">== (IGUAL)</span>
+                    <span class="token-definition">!= (DIFERENTE)</span>
+                    <span class="token-definition">&lt; (MENOR)</span>
+                    <span class="token-definition">&gt; (MAYOR)</span>
+                    <span class="token-definition">&lt;= (MENOR_IGUAL)</span>
+                    <span class="token-definition">&gt;= (MAYOR_IGUAL)</span>
+                    <span class="token-definition">&& (AND)</span>
+                    <span class="token-definition">|| (OR)</span>
+                    <span class="token-definition">! (NOT)</span>
+                    <span class="token-definition">= (ASIGNACION)</span>
+
+                    <h4 style="color: #666; margin: 15px 0 10px 0;">Delimitadores:</h4>
+                    <span class="token-definition">( (LPAR)</span>
+                    <span class="token-definition">) (RPAR)</span>
+                    <span class="token-definition">{ (LLLL)</span>
+                    <span class="token-definition">} (RRRR)</span>
+                    <span class="token-definition">[ (LCORCHETE)</span>
+                    <span class="token-definition">] (RCORCHETE)</span>
+                    <span class="token-definition">; (PUNTOYCOMA)</span>
+                    <span class="token-definition">, (COMA)</span>
+
+                    <h4 style="color: #666; margin: 15px 0 10px 0;">Palabras Reservadas:</h4>
+                    <span class="token-definition">INT</span>
+                    <span class="token-definition">FLOAT</span>
+                    <span class="token-definition">STRING</span>
+                    <span class="token-definition">BOOLEAN</span>
+                    <span class="token-definition">VOID</span>
+                    <span class="token-definition">IMPORT</span>
+                    <span class="token-definition">MAIN</span>
+                    <span class="token-definition">FUNCTION</span>
+                    <span class="token-definition">IF</span>
+                    <span class="token-definition">ELSE</span>
+                    <span class="token-definition">WHILE</span>
+                    <span class="token-definition">FOR</span>
+                    <span class="token-definition">RETURN</span>
+                    <span class="token-definition">PRINT</span>
+                    <span class="token-definition">TRUE</span>
+                    <span class="token-definition">FALSE</span>
+                    <span class="token-definition">CLASS</span>
+                    <span class="token-definition">TRY</span>
+                    <span class="token-definition">CATCH</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTALLA 5: Historial -->
+        <div class="screen" id="screen4">
+            <div class="panel" style="max-width: 100%;">
+                <h2>📁 Historial de Códigos Guardados</h2>
+                <div id="historialContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para guardar código -->
+    <div class="save-modal" id="saveModal">
+        <div class="modal-content">
+            <h3>💾 Guardar Código</h3>
+            <input type="text" id="nombreCodigo" placeholder="Nombre del código (ej: Programa 1, Tarea Final...)">
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="cerrarModalGuardar()">Cancelar</button>
+                <button class="btn-primary" onclick="guardarCodigo()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PALABRAS_RESERVADAS = {
+            'import': 'IMPORT', 'main': 'MAIN', 'function': 'FUNCTION',
+            'if': 'IF', 'else': 'ELSE', 'while': 'WHILE', 'for': 'FOR',
+            'int': 'INT', 'float': 'FLOAT', 'string': 'STRING',
+            'boolean': 'BOOLEAN', 'void': 'VOID', 'return': 'RETURN',
+            'print': 'PRINT', 'true': 'TRUE', 'false': 'FALSE',
+            'class': 'CLASS', 'try': 'TRY', 'catch': 'CATCH'
+        };
+
+        const OPERADORES = {
+            '+': 'SUMA', '-': 'RESTA', '*': 'MULT', '/': 'DIV', '%': 'MODULO',
+            '==': 'IGUAL', '!=': 'DIFERENTE', '<': 'MENOR', '>': 'MAYOR',
+            '<=': 'MENOR_IGUAL', '>=': 'MAYOR_IGUAL', '&&': 'AND', '||': 'OR',
+            '!': 'NOT', '=': 'ASIGNACION', '++': 'INCREMENTO', '--': 'DECREMENTO'
+        };
+
+        const DELIMITADORES = {
+            '(': 'LPAR', ')': 'RPAR', '{': 'LLLL', '}': 'RRRR',
+            '[': 'LCORCHETE', ']': 'RCORCHETE', ';': 'PUNTOYCOMA', ',': 'COMA'
+        };
+
+        let tokensGlobales = [];
+        let ejemploActual = 0;
+
+        // FUNCIONES DE HISTORIAL
+        function obtenerHistorial() {
+            const historial = localStorage.getItem('codigosGuardados');
+            return historial ? JSON.parse(historial) : [];
+        }
+
+        function guardarHistorial(historial) {
+            localStorage.setItem('codigosGuardados', JSON.stringify(historial));
+        }
+
+        function mostrarModalGuardar() {
+            document.getElementById('saveModal').classList.add('active');
+            document.getElementById('nombreCodigo').value = '';
+            document.getElementById('nombreCodigo').focus();
+        }
+
+        function cerrarModalGuardar() {
+            document.getElementById('saveModal').classList.remove('active');
+        }
+
+        function guardarCodigo() {
+            const nombre = document.getElementById('nombreCodigo').value.trim();
+            const codigo = document.getElementById('codeInput').value;
+
+            if (!nombre) {
+                alert('Por favor ingresa un nombre para el código');
+                return;
+            }
+
+            if (!codigo.trim()) {
+                alert('No hay código para guardar');
+                return;
+            }
+
+            const historial = obtenerHistorial();
+            const nuevoRegistro = {
+                id: Date.now(),
+                nombre: nombre,
+                codigo: codigo,
+                fecha: new Date().toLocaleString('es-MX', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })
+            };
+
+            historial.unshift(nuevoRegistro);
+            guardarHistorial(historial);
+
+            cerrarModalGuardar();
+            mostrarNotificacion('✅ Código guardado exitosamente');
+            
+            // Si estamos en la pantalla de historial, actualizar
+            if (document.getElementById('screen4').classList.contains('active')) {
+                cargarHistorial();
+            }
+        }
+
+        function cargarHistorial() {
+            const historial = obtenerHistorial();
+            const container = document.getElementById('historialContainer');
+
+            if (historial.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <div class="empty-state-text">No hay códigos guardados</div>
+                        <div class="empty-state-subtext">Guarda tu primer código desde el editor</div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            historial.forEach(item => {
+                const preview = item.codigo.substring(0, 150).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                html += `
+                    <div class="history-card">
+                        <div class="history-header">
+                            <div class="history-title">
+                                📄 ${item.nombre}
+                            </div>
+                            <div class="history-date">${item.fecha}</div>
+                        </div>
+                        <div class="history-preview">${preview}...</div>
+                        <div class="history-actions">
+                            <button class="btn-load" onclick="cargarCodigoGuardado(${item.id})">
+                                📥 Cargar
+                            </button>
+                            <button class="btn-delete" onclick="eliminarCodigo(${item.id})">
+                                🗑️ Eliminar
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function cargarCodigoGuardado(id) {
+            const historial = obtenerHistorial();
+            const codigo = historial.find(item => item.id === id);
+
+            if (codigo) {
+                document.getElementById('codeInput').value = codigo.codigo;
+                cambiarPantalla(0);
+                mostrarNotificacion('✅ Código cargado en el editor');
+            }
+        }
+
+        function eliminarCodigo(id) {
+            if (confirm('¿Estás seguro de eliminar este código?')) {
+                let historial = obtenerHistorial();
+                historial = historial.filter(item => item.id !== id);
+                guardarHistorial(historial);
+                cargarHistorial();
+                mostrarNotificacion('🗑️ Código eliminado');
+            }
+        }
+
+        function mostrarNotificacion(mensaje) {
+            // Crear notificación temporal
+            const notif = document.createElement('div');
+            notif.className = 'success';
+            notif.textContent = mensaje;
+            notif.style.position = 'fixed';
+            notif.style.top = '20px';
+            notif.style.right = '20px';
+            notif.style.zIndex = '10000';
+            notif.style.minWidth = '250px';
+            document.body.appendChild(notif);
+
+            setTimeout(() => {
+                notif.style.opacity = '0';
+                notif.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => notif.remove(), 300);
+            }, 3000);
+        }
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('saveModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                cerrarModalGuardar();
+            }
+        });
+
+        // Guardar con Enter en el input
+        document.getElementById('nombreCodigo').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                guardarCodigo();
+            }
+        });
+
+        function cambiarPantalla(num) {
+            document.querySelectorAll('.nav-card').forEach((card, index) => {
+                card.classList.toggle('active', index === num);
+            });
+            document.querySelectorAll('.screen').forEach((screen, index) => {
+                screen.classList.toggle('active', index === num);
+            });
+
+            // Cargar historial cuando se accede a esa pantalla
+            if (num === 4) {
+                cargarHistorial();
+            }
+        }
+
+        function getTokenCategory(tipo) {
+            if (Object.values(PALABRAS_RESERVADAS).includes(tipo)) return 'badge-keyword';
+            if (Object.values(OPERADORES).includes(tipo)) return 'badge-operator';
+            if (Object.values(DELIMITADORES).includes(tipo)) return 'badge-delimiter';
+            if (tipo === 'ID') return 'badge-identifier';
+            if (tipo === 'NUM_ENTERO' || tipo === 'NUM_DECIMAL') return 'badge-number';
+            if (tipo === 'CADENA') return 'badge-string';
+            return 'badge-identifier';
+        }
+
+        function analizarLexico() {
+            const codigo = document.getElementById('codeInput').value;
+            const output = document.getElementById('tokensOutput');
+            const tokens = [];
+            let linea = 1;
+            let columna = 1;
+            let i = 0;
+
+            output.innerHTML = '';
+
+            while (i < codigo.length) {
+                let char = codigo[i];
+
+                if (char === ' ' || char === '\t') {
+                    columna++;
+                    i++;
+                    continue;
+                }
+
+                if (char === '\n') {
+                    linea++;
+                    columna = 1;
+                    i++;
+                    continue;
+                }
+
+                if (char === '/' && codigo[i + 1] === '/') {
+                    while (i < codigo.length && codigo[i] !== '\n') i++;
+                    continue;
+                }
+
+                if (char === '"') {
+                    let cadena = '"';
+                    i++;
+                    while (i < codigo.length && codigo[i] !== '"') {
+                        cadena += codigo[i];
+                        i++;
+                    }
+                    cadena += '"';
+                    tokens.push({tipo: 'CADENA', valor: cadena, linea, columna});
+                    columna += cadena.length;
+                    i++;
+                    continue;
+                }
+
+                if (/\d/.test(char)) {
+                    let numero = '';
+                    let esDecimal = false;
+                    while (i < codigo.length && (/\d/.test(codigo[i]) || codigo[i] === '.')) {
+                        if (codigo[i] === '.') esDecimal = true;
+                        numero += codigo[i];
+                        i++;
+                    }
+                    tokens.push({
+                        tipo: esDecimal ? 'NUM_DECIMAL' : 'NUM_ENTERO',
+                        valor: numero,
+                        linea,
+                        columna
+                    });
+                    columna += numero.length;
+                    continue;
+                }
+
+                if (i < codigo.length - 1) {
+                    let dosChars = char + codigo[i + 1];
+                    if (OPERADORES[dosChars]) {
+                        tokens.push({tipo: OPERADORES[dosChars], valor: dosChars, linea, columna});
+                        columna += 2;
+                        i += 2;
+                        continue;
+                    }
+                }
+
+                if (OPERADORES[char]) {
+                    tokens.push({tipo: OPERADORES[char], valor: char, linea, columna});
+                    columna++;
+                    i++;
+                    continue;
+                }
+
+                if (DELIMITADORES[char]) {
+                    tokens.push({tipo: DELIMITADORES[char], valor: char, linea, columna});
+                    columna++;
+                    i++;
+                    continue;
+                }
+
+                if (/[a-zA-Z_]/.test(char)) {
+                    let palabra = '';
+                    while (i < codigo.length && /[a-zA-Z0-9_]/.test(codigo[i])) {
+                        palabra += codigo[i];
+                        i++;
+                    }
+                    const tipo = PALABRAS_RESERVADAS[palabra] || 'ID';
+                    tokens.push({tipo, valor: palabra, linea, columna});
+                    columna += palabra.length;
+                    continue;
+                }
+
+                output.innerHTML += `<div class="error">❌ Error léxico en línea ${linea}, columna ${columna}: Carácter no reconocido '${char}'</div>`;
+                columna++;
+                i++;
+            }
+
+            tokensGlobales = tokens;
+
+            const stats = {
+                total: tokens.length,
+                keywords: tokens.filter(t => Object.values(PALABRAS_RESERVADAS).includes(t.tipo)).length,
+                operators: tokens.filter(t => Object.values(OPERADORES).includes(t.tipo)).length,
+                delimiters: tokens.filter(t => Object.values(DELIMITADORES).includes(t.tipo)).length,
+                identifiers: tokens.filter(t => t.tipo === 'ID').length,
+                numbers: tokens.filter(t => t.tipo === 'NUM_ENTERO' || t.tipo === 'NUM_DECIMAL').length,
+                strings: tokens.filter(t => t.tipo === 'CADENA').length
+            };
+
+            if (tokens.length > 0) {
+                output.innerHTML = '<div class="success">✅ Análisis léxico completado exitosamente</div>';
+                
+                output.innerHTML += `
+                    <div class="stats-container">
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.total}</div>
+                            <div class="stat-label">Total Tokens</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.keywords}</div>
+                            <div class="stat-label">Palabras Reservadas</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.identifiers}</div>
+                            <div class="stat-label">Identificadores</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.operators}</div>
+                            <div class="stat-label">Operadores</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.numbers}</div>
+                            <div class="stat-label">Números</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.delimiters}</div>
+                            <div class="stat-label">Delimitadores</div>
+                        </div>
+                    </div>
+                `;
+                
+                output.innerHTML += `<h3 style="color: #667eea; margin: 25px 0 15px 0; font-size: 1.2em;">📋 Tabla de Tokens</h3>`;
+                
+                let tablaHTML = `
+                    <table class="token-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">#</th>
+                                <th style="width: 200px;">Categoría</th>
+                                <th>Lexema</th>
+                                <th style="width: 80px;">Línea</th>
+                                <th style="width: 80px;">Columna</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                tokens.forEach((token, index) => {
+                    const badge = getTokenCategory(token.tipo);
+                    tablaHTML += `
+                        <tr>
+                            <td style="color: #a0aec0; font-weight: 600;">${index + 1}</td>
+                            <td>
+                                <span class="token-type-badge ${badge}">${token.tipo}</span>
+                            </td>
+                            <td>
+                                <span class="lexema-display">${token.valor}</span>
+                            </td>
+                            <td class="location-info">${token.linea}</td>
+                            <td class="location-info">${token.columna}</td>
+                        </tr>
+                    `;
+                });
+                
+                tablaHTML += '</tbody></table>';
+                output.innerHTML += tablaHTML;
+            } else {
+                output.innerHTML += '<div class="error">⚠️ No se encontraron tokens válidos</div>';
+            }
+
+            cambiarPantalla(1);
+        }
+
+        function analizarSintactico() {
+            const output = document.getElementById('syntaxOutput');
+            
+            if (tokensGlobales.length === 0) {
+                analizarLexico();
+                return;
+            }
+
+            output.innerHTML = '';
+
+            try {
+                const resultado = parsearPrograma();
+                if (resultado.errores.length === 0) {
+                    output.innerHTML = '<div class="success">✅ Análisis sintáctico completado sin errores</div>';
+                    output.innerHTML += '<div class="tree-container">';
+                    output.innerHTML += '<h3 style="color: #667eea; margin-bottom: 15px;">Árbol Sintáctico:</h3>';
+                    output.innerHTML += generarArbolHTML(resultado.arbol);
+                    output.innerHTML += '</div>';
+                } else {
+                    resultado.errores.forEach(error => {
+                        output.innerHTML += `<div class="error">❌ ${error}</div>`;
+                    });
+                }
+            } catch (e) {
+                output.innerHTML = `<div class="error">❌ Error sintáctico: ${e.message}</div>`;
+            }
+
+            cambiarPantalla(2);
+        }
+
+        function parsearPrograma() {
+            let pos = 0;
+            const errores = [];
+            const arbol = { tipo: 'programa', hijos: [], clase: 'node-programa' };
+
+            function token() {
+                return tokensGlobales[pos];
+            }
+
+            function avanzar() {
+                pos++;
+            }
+
+            function esperarToken(tipo) {
+                if (token() && token().tipo === tipo) {
+                    const t = token();
+                    avanzar();
+                    return t;
+                }
+                errores.push(`Error en línea ${token()?.linea || 'EOF'}: Se esperaba ${tipo} pero se encontró ${token() ? token().tipo : 'EOF'}`);
+                return null;
+            }
+
+            while (token() && token().tipo === 'IMPORT') {
+                const imp = { tipo: 'importacion', hijos: [], clase: 'node-importacion' };
+                avanzar();
+                if (token() && token().tipo === 'ID') {
+                    imp.hijos.push({ tipo: 'biblioteca', valor: token().valor, clase: 'node-importacion' });
+                    avanzar();
+                }
+                esperarToken('PUNTOYCOMA');
+                arbol.hijos.push(imp);
+            }
+
+            while (token() && (token().tipo === 'INT' || token().tipo === 'FLOAT' || 
+                   token().tipo === 'STRING' || token().tipo === 'BOOLEAN' || token().tipo === 'VOID')) {
+                let siguientePos = pos + 1;
+                if (tokensGlobales[siguientePos] && tokensGlobales[siguientePos].tipo === 'FUNCTION') {
+                    const func = { tipo: 'declaracion_funcion', hijos: [], clase: 'node-metodo' };
+                    const tipoRetorno = token().valor;
+                    func.hijos.push({ tipo: 'tipo_retorno', valor: tipoRetorno, clase: 'node-metodo' });
+                    avanzar();
+                    esperarToken('FUNCTION');
+                    if (token() && token().tipo === 'ID') {
+                        func.hijos.push({ tipo: 'nombre_funcion', valor: token().valor, clase: 'node-metodo' });
+                        avanzar();
+                    }
+                    esperarToken('LPAR');
+                    
+                    const params = { tipo: 'parametros', hijos: [], clase: 'node-declaracion' };
+                    while (token() && token().tipo !== 'RPAR') {
+                        if (token().tipo === 'INT' || token().tipo === 'FLOAT' || 
+                            token().tipo === 'STRING' || token().tipo === 'BOOLEAN') {
+                            const param = { tipo: 'parametro', hijos: [], clase: 'node-declaracion' };
+                            param.hijos.push({ tipo: 'tipo', valor: token().valor });
+                            avanzar();
+                            if (token() && token().tipo === 'ID') {
+                                param.hijos.push({ tipo: 'nombre', valor: token().valor });
+                                avanzar();
+                            }
+                            params.hijos.push(param);
+                            if (token() && token().tipo === 'COMA') avanzar();
+                        } else {
+                            avanzar();
+                        }
+                    }
+                    if (params.hijos.length > 0) func.hijos.push(params);
+                    
+                    esperarToken('RPAR');
+                    
+                    const bloque = parsearBloque();
+                    if (bloque) func.hijos.push(bloque);
+                    
+                    arbol.hijos.push(func);
+                } else if (tokensGlobales[siguientePos] && tokensGlobales[siguientePos].tipo === 'MAIN') {
+                    break;
+                } else {
+                    break;
+                }
+            }
+
+            if (token() && token().tipo === 'VOID') {
+                const main = { tipo: 'metodo_principal', hijos: [], clase: 'node-metodo' };
+                avanzar();
+                esperarToken('MAIN');
+                esperarToken('LPAR');
+                esperarToken('RPAR');
+                
+                const bloque = parsearBloque();
+                if (bloque) main.hijos.push(bloque);
+                
+                arbol.hijos.push(main);
+            } else {
+                errores.push('Error: Se esperaba el método main');
+            }
+
+            function parsearBloque() {
+                if (!esperarToken('LLLL')) return null;
+                
+                const bloque = { tipo: 'bloque', hijos: [], clase: 'node-sentencia' };
+                
+                while (token() && token().tipo !== 'RRRR') {
+                    const sentencia = parsearSentencia();
+                    if (sentencia) bloque.hijos.push(sentencia);
+                }
+                
+                esperarToken('RRRR');
+                return bloque;
+            }
+
+            function parsearSentencia() {
+                if (!token()) return null;
+
+                if (token().tipo === 'INT' || token().tipo === 'FLOAT' || 
+                    token().tipo === 'STRING' || token().tipo === 'BOOLEAN') {
+                    const decl = { tipo: 'declaracion_variable', hijos: [], clase: 'node-declaracion' };
+                    decl.hijos.push({ tipo: 'tipo_dato', valor: token().valor, clase: 'node-declaracion' });
+                    avanzar();
+                    
+                    if (token() && token().tipo === 'ID') {
+                        decl.hijos.push({ tipo: 'identificador', valor: token().valor, clase: 'node-declaracion' });
+                        avanzar();
+                        
+                        if (token() && token().tipo === 'ASIGNACION') {
+                            avanzar();
+                            const expr = parsearExpresion();
+                            if (expr) decl.hijos.push(expr);
+                        }
+                    }
+                    esperarToken('PUNTOYCOMA');
+                    return decl;
+                }
+
+                if (token().tipo === 'IF') {
+                    const ifStmt = { tipo: 'sentencia_if', hijos: [], clase: 'node-sentencia' };
+                    avanzar();
+                    esperarToken('LPAR');
+                    const condicion = parsearExpresion();
+                    if (condicion) ifStmt.hijos.push(condicion);
+                    esperarToken('RPAR');
+                    const bloqueIf = parsearBloque();
+                    if (bloqueIf) ifStmt.hijos.push(bloqueIf);
+                    
+                    if (token() && token().tipo === 'ELSE') {
+                        avanzar();
+                        const bloqueElse = parsearBloque();
+                        if (bloqueElse) {
+                            bloqueElse.tipo = 'bloque_else';
+                            ifStmt.hijos.push(bloqueElse);
+                        }
+                    }
+                    return ifStmt;
+                }
+
+                if (token().tipo === 'WHILE') {
+                    const whileStmt = { tipo: 'sentencia_while', hijos: [], clase: 'node-sentencia' };
+                    avanzar();
+                    esperarToken('LPAR');
+                    const condicion = parsearExpresion();
+                    if (condicion) whileStmt.hijos.push(condicion);
+                    esperarToken('RPAR');
+                    const bloque = parsearBloque();
+                    if (bloque) whileStmt.hijos.push(bloque);
+                    return whileStmt;
+                }
+
+                if (token().tipo === 'FOR') {
+                    const forStmt = { tipo: 'sentencia_for', hijos: [], clase: 'node-sentencia' };
+                    avanzar();
+                    esperarToken('LPAR');
+                    
+                    if (token() && token().tipo !== 'PUNTOYCOMA') {
+                        const init = parsearSentencia();
+                        if (init) forStmt.hijos.push(init);
+                    } else {
+                        esperarToken('PUNTOYCOMA');
+                    }
+                    
+                    if (token() && token().tipo !== 'PUNTOYCOMA') {
+                        const condicion = parsearExpresion();
+                        if (condicion) forStmt.hijos.push(condicion);
+                    }
+                    esperarToken('PUNTOYCOMA');
+                    
+                    if (token() && token().tipo !== 'RPAR') {
+                        const inc = parsearAsignacion();
+                        if (inc) forStmt.hijos.push(inc);
+                    }
+                    esperarToken('RPAR');
+                    
+                    const bloque = parsearBloque();
+                    if (bloque) forStmt.hijos.push(bloque);
+                    return forStmt;
+                }
+
+                if (token().tipo === 'RETURN') {
+                    const ret = { tipo: 'sentencia_return', hijos: [], clase: 'node-sentencia' };
+                    avanzar();
+                    if (token() && token().tipo !== 'PUNTOYCOMA') {
+                        const expr = parsearExpresion();
+                        if (expr) ret.hijos.push(expr);
+                    }
+                    esperarToken('PUNTOYCOMA');
+                    return ret;
+                }
+
+                if (token().tipo === 'PRINT') {
+                    const print = { tipo: 'impresion', hijos: [], clase: 'node-sentencia' };
+                    avanzar();
+                    esperarToken('LPAR');
+                    const expr = parsearExpresion();
+                    if (expr) print.hijos.push(expr);
+                    esperarToken('RPAR');
+                    esperarToken('PUNTOYCOMA');
+                    return print;
+                }
+
+                if (token().tipo === 'ID') {
+                    const id = token().valor;
+                    avanzar();
+                    
+                    if (token() && token().tipo === 'LPAR') {
+                        const llamada = { tipo: 'llamada_funcion', hijos: [], clase: 'node-expresion' };
+                        llamada.hijos.push({ tipo: 'nombre_funcion', valor: id, clase: 'node-expresion' });
+                        avanzar();
+                        
+                        while (token() && token().tipo !== 'RPAR') {
+                            const arg = parsearExpresion();
+                            if (arg) llamada.hijos.push(arg);
+                            if (token() && token().tipo === 'COMA') avanzar();
+                        }
+                        esperarToken('RPAR');
+                        esperarToken('PUNTOYCOMA');
+                        return llamada;
+                    } else if (token() && token().tipo === 'ASIGNACION') {
+                        const asig = { tipo: 'asignacion', hijos: [], clase: 'node-declaracion' };
+                        asig.hijos.push({ tipo: 'identificador', valor: id, clase: 'node-declaracion' });
+                        avanzar();
+                        const expr = parsearExpresion();
+                        if (expr) asig.hijos.push(expr);
+                        esperarToken('PUNTOYCOMA');
+                        return asig;
+                    }
+                }
+
+                avanzar();
+                return null;
+            }
+
+            function parsearAsignacion() {
+                if (token() && token().tipo === 'ID') {
+                    const asig = { tipo: 'asignacion', hijos: [], clase: 'node-declaracion' };
+                    asig.hijos.push({ tipo: 'identificador', valor: token().valor });
+                    avanzar();
+                    if (token() && token().tipo === 'ASIGNACION') {
+                        avanzar();
+                        const expr = parsearExpresion();
+                        if (expr) asig.hijos.push(expr);
+                    }
+                    return asig;
+                }
+                return null;
+            }
+
+            function parsearExpresion() {
+                const expr = { tipo: 'expresion', hijos: [], clase: 'node-expresion' };
+                let tieneContenido = false;
+                
+                while (token() && token().tipo !== 'PUNTOYCOMA' && 
+                       token().tipo !== 'RPAR' && token().tipo !== 'COMA' &&
+                       token().tipo !== 'LLLL') {
+                    
+                    if (token().tipo === 'NUM_ENTERO' || token().tipo === 'NUM_DECIMAL') {
+                        expr.hijos.push({ tipo: 'numero', valor: token().valor, clase: 'node-expresion' });
+                        tieneContenido = true;
+                        avanzar();
+                    } else if (token().tipo === 'CADENA') {
+                        expr.hijos.push({ tipo: 'cadena', valor: token().valor, clase: 'node-expresion' });
+                        tieneContenido = true;
+                        avanzar();
+                    } else if (token().tipo === 'TRUE' || token().tipo === 'FALSE') {
+                        expr.hijos.push({ tipo: 'booleano', valor: token().valor, clase: 'node-expresion' });
+                        tieneContenido = true;
+                        avanzar();
+                    } else if (token().tipo === 'ID') {
+                        const id = token().valor;
+                        avanzar();
+                        if (token() && token().tipo === 'LPAR') {
+                            const llamada = { tipo: 'llamada_funcion', hijos: [], clase: 'node-expresion' };
+                            llamada.hijos.push({ tipo: 'nombre', valor: id });
+                            avanzar();
+                            while (token() && token().tipo !== 'RPAR') {
+                                const arg = parsearExpresion();
+                                if (arg && arg.hijos.length > 0) llamada.hijos.push(arg);
+                                if (token() && token().tipo === 'COMA') avanzar();
+                            }
+                            esperarToken('RPAR');
+                            expr.hijos.push(llamada);
+                        } else {
+                            expr.hijos.push({ tipo: 'variable', valor: id, clase: 'node-expresion' });
+                        }
+                        tieneContenido = true;
+                    } else if (token().tipo === 'SUMA' || token().tipo === 'RESTA' || 
+                               token().tipo === 'MULT' || token().tipo === 'DIV' ||
+                               token().tipo === 'MENOR' || token().tipo === 'MAYOR' ||
+                               token().tipo === 'IGUAL' || token().tipo === 'DIFERENTE' ||
+                               token().tipo === 'AND' || token().tipo === 'OR') {
+                        expr.hijos.push({ tipo: 'operador', valor: token().valor, clase: 'node-expresion' });
+                        tieneContenido = true;
+                        avanzar();
+                    } else if (token().tipo === 'LPAR') {
+                        avanzar();
+                        const subExpr = parsearExpresion();
+                        if (subExpr && subExpr.hijos.length > 0) {
+                            expr.hijos.push(subExpr);
+                            tieneContenido = true;
+                        }
+                        esperarToken('RPAR');
+                    } else {
+                        break;
+                    }
+                }
+                
+                return tieneContenido ? expr : null;
+            }
+
+            return { arbol, errores };
+        }
+
+        function generarArbolHTML(nodo, nivel = 0) {
+            let html = '';
+            
+            if (nodo.tipo) {
+                const clase = nodo.clase || '';
+                html += `<div class="tree-node" style="margin-left: ${nivel * 20}px;">`;
+                html += `<span class="${clase}">${nodo.tipo}</span>`;
+                if (nodo.valor) html += `: <strong>${nodo.valor}</strong>`;
+                html += '</div>';
+            }
+            
+            if (nodo.hijos && nodo.hijos.length > 0) {
+                nodo.hijos.forEach(hijo => {
+                    html += generarArbolHTML(hijo, nivel + 1);
+                });
+            }
+            
+            return html;
+        }
+
+        function analizarCompleto() {
+            analizarLexico();
+            setTimeout(() => {
+                analizarSintactico();
+            }, 500);
+        }
+
+        function limpiar() {
+            document.getElementById('codeInput').value = '';
+            document.getElementById('tokensOutput').innerHTML = '<p style="color: #888;">Presiona "Análisis Léxico" para ver los tokens...</p>';
+            document.getElementById('syntaxOutput').innerHTML = '<p style="color: #888;">Presiona "Análisis Sintáctico" para ver el resultado...</p>';
+            tokensGlobales = [];
+            cambiarPantalla(0);
+        }
+
+        function cargarArchivo() {
+            const file = document.getElementById('fileInput').files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('codeInput').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function mostrarEjemplo(num) {
+            ejemploActual = num;
+            document.querySelectorAll('.example-tab').forEach((tab, index) => {
+                tab.classList.toggle('active', index === num);
+            });
+            document.querySelectorAll('.tab-content').forEach((content, index) => {
+                content.classList.toggle('active', index === num);
+            });
+        }
+
+        function cargarEjemploActual() {
+            const ejemplo = document.querySelector('.tab-content.active .example-code').textContent;
+            document.getElementById('codeInput').value = ejemplo;
+        }
+    </script>
+</body>
+</html>
